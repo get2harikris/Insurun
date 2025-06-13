@@ -1,0 +1,606 @@
+= Business Rules & Logic
+David Rose <david@hexa1.io>
+{revision-date}
+:revnumber: {project-version}
+:example-caption!:
+:sectnums:
+:sectlinks:
+:sectanchors:
+:experimental:
+// :data-uri:
+ifndef::imagesdir[:imagesdir: images]
+ifndef::sourcedir[:sourcedir: ../java]
+
+Authoritive source of Business Rules & Logic that apply to Insurun and Carrier fields / forms.
+
+include::include/legal.adoc[]
+
+== Introduction
+
+This document is assembled manually, and references are created in various field mapping databases to reference the IDs of rules.
+
+=== Notes
+
+. A limit is always in $1,000 resultion. So if denoted as 50/100, then it is: $50,000/$100,000
+. A PPA Limit is denoted as <per driver>/<per accident>, so 25/50 = $25k per driver, $50k per accident
+. A CSL (Combined Single Limit) only has 1 limit that applies to both driver and accident
+
+== All Lines
+
+=== Desired Policy Start Date
+
+[[GLB002]]
+==== Desired Policy Start date cannot be > 30 Days in the Future and can not be < today ``GLB002``
+
+1. Default date should be Today + 1 day.
+
+[[GLB003]]
+==== Desired Policy start date cannot be later than Existing Insurance Expiration Date ``GLB003``
+
+=== Prior Policy Expiration Date
+
+[[GLB004]]
+==== Prior Policy Expiration Date defaults to Desired Policy Start Date
+
+1. If the applicant has prior insurance, and the prior policy expiration date is not set, set it to the desired policy start date
+2. This means that by default, it will default to today + 1 day
+3. It is important not to have a lapse in coverage
+
+
+1. But can be the same, or prior
+
+=== Payment Plans
+
+[[GLB001]]
+==== Always select the most liberal payment plan ``GLB001``
+
+1. Usually means the most # of payments, so if carrier provides 6, 8, 12 options, choose 12.
+
+== Personal Lines
+
+=== Additional Interest
+
+==== For PPA, addl interest can only be added to vehicles with BOTH COMP AND COLL (with PD)
+
+=== Other (may be duplicate)
+
+- Effective date: no more than 30 days from today. If > 30, cap at 30 days from today
+    - To prevent errors during quote transmission, if effective date is today, and quote is sent after 11:30pm, set effective date to tomorrow
+- Cannot be prior to current date, if so, assume current date
+- Quote expiration is 1 year from effective date by default
+- Payment Plans: always select the plan with the most # of payments, lowest downpayment and lowest installment amount
+
+
+== Personal Auto
+
+=== Applicants
+
+[[PPAA01]]
+==== There can be a maximum of 2 applicants per PPA Policy ``PPAA01``
+
+=== Physical Damage
+
+==== A vehicle HAS PD if BOTH COMP AND COLL are selected, + Towing + Rental
+
+1. COMP with Full Glass (default)
+2. COLL
+3. Towing (default to Yes if COMP+COLL)
+4. Rental Reimbursement (default to Yes if COMP+COLL)
+5. Don't send over other PD fields unless COMP is enabled
+
+=== UM/SUM
+
+[[PPA011]]
+==== Basic UM/SUM - The Uninsured Motorist Coverage Limit can NEVER Exceed the BI Limit ``PPA011``
+
+If the Bodily injury (BI) ``RN.ALL.PPA.660`` limit is 25/50 then Uninsured Motorist ``RN.ALL.PPA.680 Limit`` = 25/50SUM (Always choose “SUM” for UM).
+
+The UM/SUM limit (``RN.ALL.PPA.680``) can never exceed the BI limit (``RN.ALL.PPA.660``). Additionally, for purposes of Screen Scrap the carriers proprietary program by way of logic may not load additional UM/SUM limits as the UM/SUM limit can never exceed the BI limit.
+
+- For example if the user were to choose BI 25/50 then UM/SUM can only be 25/50.
+- If user were to choose BI 50/100 then the UM/SUM options would load 25/50, 50/100.
+- If user were to choose BI 250/500 then the UM/SUM options would load 25/50, 50/100, 100/300, 250/500.
+
+=== PIP and APIP
+
+[[PPA001]]
+==== PIP is mandatory in NY State, minimum $50k ``PPA001``
+
+[[PPA002]]
+==== PIP Above 50k is considered APIP (Additional PIP) ``PPA002``
+
+1. PIP is Aggregate
+2. Example 1: PIP=100, so PIP=50 (minimum), APIP=50
+3. Example 2: PIP=150, so PIP=50 (minimum), APIP=100
+
+[[PPA003]]
+==== PIP Deductible is optional, defaults to $200 ``PPA003``
+
+. If $0 option present at Carrier level, then $0 is equal to No PIP Deductible
+
+[[PPA004]]
+==== APIP Defaults to "Guest out of State" ``PPA003``
+
+. $0 APIP option is equivalent to "Guest out of State"
+. If minimum PIP is chosen ($50k), APIP defaults to Guest out of State (if option is present)
+
+=== SSL (Spousal Supplemental)
+
+[[PPA017]]
+==== Default to YES for Spouse only ``PPA017``
+
+1. If 2 drivers, and 2nd driver is Spouse of Applicant (Relationship to Applicant), give spouse SSL=True
+2. If coverage limit options are present, select the lowest coverage.
+
+=== Collision (COLL)
+
+[[PPA012]]
+==== Collision Coverage CANNOT be purchased without Comprehensive Coverage ``PPA012``
+
+1. However, Comprehensive Coverage can be Purchased without Collision Coverage.
+
+=== Comprehensive (COMP)
+
+[[PPA013]]
+==== Comprehensive Coverage CAN be Purchased without Collision Coverage ``PPA013``
+
+1. However, COLL can't be purchased without COMP
+
+[[PPA014]]
+==== COMP is the determinant in the Physical Damage Coponent ``PPA014``
+
+1. If COMP is not present, the COLL, RR, and TL are not applicable.
+2. If COMP is not selected or selected to "No Coverage", don't send the other values to the carriers. For example, the UIs of carrier portals will blank out the other options (usually), so if no comp is present, we can't fill those fields, however, APIs will still allow tags for COLL, TL, RR to be present-- those should not be added unless COMP is selected, otherwise integration will fail.
+
+=== Rental Reimbursement (RR)
+
+[[PPA005]]
+==== At least $30 per day ``PPA005``
+
+1. When Carriers present multiple RR rates, select the one that provides at least $30 per day ($30/$30)
+2. NOTE: Insurun's field is Yes/No only
+3. If carrier presents options > $30, such as $50/$1,500 (per occurence), choose the lower option that's above $30.
+
+[[PPA005A]]
+==== Selected by Default when Physical Damage Present ``PPA005A``
+
+1. COMP+COLL are selected
+
+=== Roadside Assistance (RA)
+
+[[PPA018]]
+==== Default to Yes if quoting PD `PPA018`
+
+1. If the carrier offers it and the client is quoting Physical Damage (Comp and Coll) then default to yes/500
+2. If carrier provides limit options, select lowest one, such as $500 (equiv to Yes if COMP+COLL)
+
+=== Additional Equipment (EQ)
+
+[[PPA006]]
+==== No Additional Equipment Necessary ``PPA006``
+
+1. At carrier level, either select None, or don't map this field.
+
+=== Towing
+
+[[PPA009]]
+==== Towing defaults to $75 for all Carriers ``PPA009``
+
+1. Insurun field is Yes/No. If Yes, assume $75.
+
+=== Driver Experience
+
+[[PPA007]]
+==== Any driver driving less than 3 years is considered inexperienced ``PPA007``
+
+[[PPA014]]
+==== Year Licensed should be calculated as DOB+ 17 years ``PPA014``
+
+[[PPA015]]
+==== Years Driving should be calculated as current date less 17 years ``PPA015``
+
+=== Garaging Zipcode
+
+[[PPA024]]
+==== Defaults to Applicant's Zipcode (if not provided) ``PPA024``
+
+=== Vehicle Usage
+
+[[PPA008]]
+==== Assume 5 miles daily if vehicle usage is Commute (Work/School) ``PPA008``
+
+=== Driver Education / Student Status
+
+==== Defensive Driving is equivalent to Accident Prevention
+
+1. Defensive Driving / Accident Prevention is a voluntary course that applies to any age driver. It provides a reduction off the Liability and Collision components of PPA insurance only, as Liability and Collision are components of driving behaviour. Therefore, no discount is available for COMP coverage as COMP does not relate to driving behaviour but to the probablility of a vechile being stolen/vandalized or damaged due to its geographic area of garaging. Discounts will automatically be generated by the proprietary system of the carrier when entered as a "date" or as a "Yes."
+
+[[PPA020]]
+==== Defensive Driving Course Date should be today less 7 days ``PPA020``
+
+==== Driver Training is equivalent to Driver's ED (Education)
+
+1. Only applies to drivers < 21 years of age.
+
+[[PPA022]]
+==== Distant Student ``PPA022``
+
+1. Default to NO for all Carriers.
+1. A distant student is a student that is away at college more than 100 miles from home.
+2. It is applicable only if driver is 21 or younger.
+
+=== Driver Vehicle Usage
+
+[[PPA021]]
+==== Vehicle usage always has to add up to 100% (OAOD, MATO) ``PPA021``
+
+1. Always has to add up to 100% for each vehicle
+2. OAOD (One auto, one driver), usage = 100%
+3. MATO (More autos than operators): 90/10 Primary driver/Secondary driver (swap if 2 drivers)
+
+=== Vehicle Class
+
+[[PPA010]]
+==== Class Code ``PPA010``
+
+.Decision Table
+[format="csv", options="header"]
+|===
+Id,Class Code,Gender,Marital Status,Age
+1,1B,Male,Single,>30
+2,1B,Male,Married,>25
+3,1B,Female,Single,>=25
+4,1B,Female,Married,>=25
+5,9,Male,Married,>=20 AND <25
+6,9,Male,Single,>=25 AND <30
+7,6A,Male,Single,>15 AND <21
+8,6B,Male,Single,>20 AND <25
+9,4B,Female,Married,>20 AND <25
+10,8A,Female,Single,>15 AND <21
+11,8A,Female,Married,>15 AND <21
+12,8B,Female,Single,>20 AND <25
+|===
+
+[[PPA010A]]
+==== SubClass Code ``PPA010A``
+
+1. Experienced Driver when driving >= 3 years (see rule)
+2. Total points **SHOULD NOT EXCEED 6**: If > 6, then set to 6
+3. (NOTE) This mostly applies to Countrywide
+
+.Decision Table
+[format="csv", options="header"]
+|===
+Accident / Violation,Sub Code,Experience, Points
+(Default) No Incidences or 1 minor Incident,91,Experienced,0 pts
+1 Minor Violation with No Incidents or 1 Minor Incident,93,Inexperienced, 0pts (Inexp. driver can't have points)
+1 Minor Violations or 1 At Fault Accident,24,Experienced,2 pts
+2 Minor Violations or 1 At Fault Accident,46,Experienced,4 pts
+Operating without License,54,Experienced,5 pts
+2 Minor Violations or 2 At Fault Accidents, 66, Experienced,6 pts
+DUI or DWI,66,Experienced,6 pts
+|===
+
+=== Point Calculation
+
+[[PPAP01]]
+==== Points are cumulative and cannot exceed 17 ``PPAP01``
+
+1. Each accident/incident can accrue points to the total
+2. If more than 17 points, set points to 17
+
+[[PPAP02]]
+==== 1st Minor violation = 0pts, Each minor after is 2pts ``PPAP02``
+
+1. Example: 1 at fault accident (2), 1 Minor (0), 1 DWI (6), total = 8pts
+2. Example: 2 at fault accidents (4), 3 minors (4), 2 DWIs (12) = 20 pts, (max 17), so 17pts when inputing to the Carrier
+
+=== Coverage Presets
+
+[[PPA10APRE]]
+==== Presets for Agent Portal for NY PPA 10 ``PPA10APRE``
+
+1. These **PRESETS** denote the pre-selected coverage levels for each tier in both the Agent Portal and Consumer Portal
+2. NOTE: The only condition is vehicle age. If >= 7 years, the Physical Damage Component (COMP+COLL+TL+RR) is **DEFAULTED** to None (not selected). However, the agent/user may add it on if desired.
+3. This table is the inverse of <<PPA10CPRE>>
+
+.Mapping Table
+[format="csv", options="header"]
+|===
+,(a) Preset,(b) BI, (c) PD,(d) UM, (e) PIP,(f) OBEL,(g) MED,(h) COMP,(i) COLL,(j) Towing,(k) Rental,(l) Condition
+1,State Minimum,25k/50k,10k,25k/50k,50k,None,1k,,,,,
+2,Basic,25k/50k,10k,25k/50k,50k,None,1k,1k Full Glass,1k,Yes,Yes,
+3,Standard,$50/$100,$25,$50/$100,$50k,None,$1k,$1k Full Glass [small]#(if veh < 7 y/o)#,$1k [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,[small]#If auto >= 7 years old: No Physical Damage Component applies (but is user selectable). See <<PPA10CPRE>> row 6#
+4,Preferred,$100/$300,$50,$100/$300,$50k,None,$1k,$500 Full Glass [small]#(if veh < 7 y/o)#,$500 [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,[small]#If auto >= 7 years old: No Physical Damage Component applies (but is user selectable). See <<PPA10CPRE>> row 7#
+5,Premium,$250/$500,$100,$250/$500,$50k,None,$1k,$500 Full Glass [small]#(if veh < 7 y/o)#,$500 [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,Yes [small]#(if veh < 7 y/o)#,[small]#If auto >= 7 years old: No Physical Damage Component applies (but is user selectable). See <<PPA10CPRE>> row 8#
+|===
+
+[[PPA10CPRE]]
+==== Coverage Selection Options in Consumer Portal ONLY ``PPA10CPRE``
+
+1. This table denotes the automatic selection of the Coverage level based on vehicle info: based on info, a Coverage level is selected, however, it is user-modifyable (both in Agent Portal and Consumer Portal)
+2. This table is the inverse of <<PPA10APRE>>
+3. If Rows 6+7+8 are selected and Auto >= 7 y/o, Physical Damage component is dropped (defaulted to None) along with pre-selected Coverage level, however, user has option to add it on.
+
+.Decision Table
+|===
+| |(a) Insured? (RN.ALL.PL230) |(b) Curr. BI (RN.ALL.PPA.230) |(c) Own and Make Pmts? or Lease (RN.ALL.PPA.380.10/20/30) |(d) 7+ Yr Model |(e) Coverage|(f) Notes
+
+| 1
+| Yes
+| 25/50
+| Own, Make Payments
+|
+| Basic
+|
+
+| 2
+| Yes
+| 50/100
+| Own, Make Payments
+|
+| Standard
+|
+
+| 3
+| Yes
+| 100/300
+| Own, Make Payments
+|
+| Preferred
+|
+
+| 4
+| Yes
+| 250/500
+| Own, Make Payments
+|
+| Premium
+|
+
+| 5
+| Yes
+| 25/50
+| Own, Don't Make Payments
+| No
+| State Minimum
+|
+
+| 6
+| Yes
+| 50/100
+| Own, Don't Make Payments
+| Yes
+| Standard
+| Physical Damage (COMP+COLL+TL+RR) default to OFF (None selected), but optionally added by user (both Agent & Consumer Portals)
+
+| 7
+| Yes
+| 100/300
+| Own, Don't Make Payments
+| Yes
+| Preferred
+| Physical Damage (COMP+COLL+TL+RR) default to OFF (None selected), but optionally added by user (both Agent & Consumer Portals)
+
+| 8
+| Yes
+| 250/500
+| Own, Don't Make Payments
+| Yes
+| Premium
+| Physical Damage (COMP+COLL+TL+RR) default to OFF (None selected), but optionally added by user (both Agent & Consumer Portals)
+
+| 9
+| Yes
+| 25/50
+| Lease
+|
+| Preferred
+| Selectable up to Premium level, but not below Preferred
+
+| 10
+| Yes
+| 50/100
+| Lease
+|
+| Preferred
+| Selectable up to Premium level, but not below Preferred
+
+| 11
+| Yes
+| 100/300
+| Lease
+|
+| Preferred
+| Selectable up to Premium level, but not below Preferred
+
+| 12
+| Yes
+| 250/500
+| Lease
+|
+| Premium
+| Can go down to Preferred, but not below
+
+| 13
+| No
+|
+| Own and Make Payments
+|
+| Basic
+| Default Basic, but can be adjusted to anything
+
+| 14
+| No
+|
+| Own, don't Make Payments
+| No
+| State Minimum
+| Default State Min, but can be adjusted to anything
+
+| 15
+| No
+|
+| Own, don't Make Payments
+| Yes
+| Basic
+| Default Basic, but can be adjusted to anything
+
+| 16
+| No
+|
+| Lease
+|
+| Preferred
+| Can go up to Premium, but not below Preferred
+
+|===
+
+
+=== CSL
+
+[[PPA030]]
+==== Combined Single Limit Policies (CSL) ``PPA030``
+
+On Current bodily injury limit and on the Customer Profile screen drop down boxes)
+
+Add Liability limits of
+
+1. CSL $100,000
+2. CSL $300,000
+3. CSL $500,000
+
+Therefore:
+
+1. if Current liability limit is CSL $100,000 and not leased then CSL $100,000
+2. if Current liability limit is CSL $300,000 and not leased then CSL$300,000
+3. if Current liability limit is CSL $500,000 and not leased then CSL$500,000
+4. if Current liability limit is CSL 100,000 and vehicle is leased then CSL $300,000
+5. if Current liability limit is CSL $300,000 and vehicle is leased then CSL$300,000
+6. if Current liability limit is CSL $500,000 and vehicle is leased then CSL$500,000
+
+During calendar year 2013, [for] all 2006 and newer model year vehicles. On January 1, 2013, and on each January 1st thereafter,
+the applicable model year shall be moved forward by one year.
+
+For example: in 2013 an insurer should insure for physical damage a 2006 and newer model year vehicle and in 2014 an insurer should insure for physical damage 2007 and newer model year vehicles.
+
+Therfore if a prospect chooses a liability limit on the Contact Screen and the vehicle is not 7 model years old or newer, and they choose "Own and do not make Payment" on the Vehicle screen, then Liability Only coverage applies for that vehicle.
+
+- For Example a prospect is  getting a quote for a 2005 Jeep and chooses "Own and do not make Payments", then liability only coverage applies
+
+Additionally, if a prospect chooses a liability limit on the Contact Screen and the vehicle is 7 model years old or older, and they choose "Own and make Payments" on the Vehicle screen, then Liability and Physical Damage applies for that Vehicle.
+
+- For Example a prospect is  getting a quote for a 2005 Jeep and chooses "Own and make Payments", then liability and physical damage coverage applies
+
+=== Other (may be duplicate)
+
+- All Vehicles must carry the same liability limit (BI)
+- PD is required for vehicles 7 years old and newer
+- All leased vehicles require PD
+- All vehicles of ownership type "Own and Make Payments" require PD
+
+**Coverage**
+
+- COMP can be purchased without COLL
+- COLL cannot be purchased without COMP
+- If no COMP, no COMP
+- If COMP and/or COLL:
+- Rental = Yes
+- Towing = Yes
+- Anti-Theft = Yes, passive
+- UM will always be 25/50 default
+- SUM comes from Lighthouse (called uninsured in lighthouse)
+- SUM cannot exceed BI (Liability)
+- If Carrier lumps UM/SUM lumped together, just use SUM
+- if PIP is selected
+- aPIP is automatically chosen as "Guest Out Of State"
+- PIP base limit is 50
+- If user chooses 50, they get 200 deductable, and apip = GOS ($1)
+- We can add aPIP in increments of 50k
+- If use chooses 150PIP, they get 50 PIP + 100 APIP
+
+**Driver Experience**
+
+- < 3 years = Inexperienced Driver
+- If under 21, we need to specify if drivers ed has been taken
+- Driver Training Credit = Driver's Ed
+- Accident Preventions Discount given when Defensive Driving course has been taken
+- Defensive Driving course date: if not specified, todays - 7 days
+
+**Driver**
+
+- Good Student = B of better average at (regular) school. (Only for drivers < 21)
+- Assign unique drive to unique vehicle by default D1, D2, V1, V2: D1 drives V1, D2 V2, etc... same for vehicle % use, D1 90% V1, 10% V2, D2 90% V2, 10% V1, etc...
+- If not specified, date first licensed it DOB + 16 years
+
+**Auto Convictions**
+
+- Map over major convictions only: DUI/DWI, Driving with suspended license, etc...
+- Point Calculation (if not specified):
+- If DWI/DUI, +6
+- Minor Offenses +2 each
+
+**Vehicle Class Calculation**
+
+- 1A: usage = Pleasure and miles < 10 and (Male age > 30 or Female age > 25)
+- 1B: usage = Commute and miles < 10 and (Male age > 30 or Female age > 25)
+- 1C: usage = Commute and miles > 10 and (Male age > 30 or Female age > 25)
+- 6A: usage = Pleasure and Single Male age >= 16 and < 21
+- 6B: usage = Pleasure or Commute and Single Male age >= 21 and < 25
+- 8A: single Female age >= 16 and < 21
+- 8B: single Female age >= 21
+- 9: married Male age >= 21 and < 30
+
+== Homeowners
+
+Note:
+
+COV A == Estimated Replacement Cost == Primary Coverage (todo: add to glossary)
+
+=== Coverage Levels (A-F)
+
+[[HO1010]]
+==== Cov A Calculated by Multiplying Square footage by multiplier (carrier-specific, default = $225) ``HO1010``
+
+So if property is 1000 sq ft, and multiplier == $225, Cov A = $225,000
+
+This becomes the basis for the following rules, which allow the calculation of B, C, D based on A amount.
+
+[[HO1011]]
+==== Autocalc Cov B = 10% of Cov A ``HO1011``
+
+[[HO1012]]
+==== Autocalc Cov C = 70% of Cov A ``HO1012``
+
+[[HO1013]]
+==== Autocalc Cov D = 20% of Cov A ``HO1013``
+
+=== Endorsements
+
+[[HO2010]]
+==== Always add Additional Coverage A (25%) ``HO2010``
+
+[[HO2011]]
+==== Always select Increased Ordinance, default to minimum value ``HO2011``
+
+=== Other (may be duplicate)
+
+**Home**
+
+- Any exotic dogbreed prevents quote from running with carrier (rejected prior to sending to carrier)
+- Always choose Inflation Guard (lowest value)
+- Always choose Ordinance (lowest value)
+- Always use circuit breakers for Electrical Wiring Type
+- Fire Extinguisher, required always
+- Fire Alarm = always local
+- Local Burglar Alarm should always be Yes
+- Water backup, if selected, always 5000 unless other value provided
+- Renovation year for home systems is curent year if house is more than 6 years old
+
+**Dwelling Information**
+
+- Default roofing type: Pitch/Asphalt/Composite
+- Heating Type:
+- defaults to Oil Hot Air/Water.
+- above/below ground must be mapped
+- Fire Alarm: Always default to YES, (and type = local)
